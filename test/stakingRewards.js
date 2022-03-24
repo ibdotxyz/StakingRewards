@@ -193,6 +193,38 @@ describe('StakingRewards', async () => {
     });
   });
 
+  describe('exit', async () => {
+    beforeEach(async () => {
+      const blockTimestamp = 100000;
+      await Promise.all([
+        stakingRewards.setBlockTimestamp(blockTimestamp),
+        stakingRewards.addRewardsToken(rewardsToken1.address, SEVEN_DAYS),
+        stakingRewards.addRewardsToken(rewardsToken2.address, SEVEN_DAYS),
+        rewardsToken1.transfer(stakingRewards.address, toWei('100')),
+        rewardsToken2.transfer(stakingRewards.address, toWei('100')),
+        stakingToken.connect(user1).approve(stakingRewards.address, toWei('100')),
+        stakingToken.connect(user2).approve(stakingRewards.address, toWei('100'))
+      ]);
+
+      await stakingRewards.notifyRewardAmount(rewardsToken1.address, toWei('10'));
+      await stakingRewards.notifyRewardAmount(rewardsToken2.address, toWei('50'));
+    });
+
+    it('exits successfully', async () => {
+      await stakingRewards.connect(user1).stake(toWei('10'));
+      await stakingRewards.connect(user2).stake(toWei('20'));
+
+      const blockTimestamp = 101000;
+      await stakingRewards.setBlockTimestamp(blockTimestamp);
+
+      await stakingRewards.connect(user1).exit();
+
+      expect(await stakingRewards.balanceOf(user1Address)).to.eq(0);
+      expect(await rewardsToken1.balanceOf(user1Address)).to.eq('5511463844797000'); // 1000 / (86400*7) * 10e18 * 1/3
+      expect(await rewardsToken2.balanceOf(user1Address)).to.eq('27557319223985660'); // 1000 / (86400*7) * 50e18 * 1/3
+    });
+  });
+
   describe('notifyRewardAmount', async () => {
     beforeEach(async () => {
       const blockTimestamp = 100000;
