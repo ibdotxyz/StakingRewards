@@ -203,6 +203,8 @@ describe('StakingRewards', async () => {
     });
 
     it('notifies the reward amount', async () => {
+      await rewardsToken1.transfer(stakingRewards.address, toWei('100'));
+
       await stakingRewards.notifyRewardAmount(rewardsToken1.address, toWei('10'));
       expect(await stakingRewards.rewardRate(rewardsToken1.address)).to.eq('16534391534391'); // 10e18 / (86400*7)
       expect(await stakingRewards.lastUpdateTime(rewardsToken1.address)).to.eq(100000);
@@ -219,6 +221,10 @@ describe('StakingRewards', async () => {
 
     it('fails to notify reward amount for reward token not supported', async () => {
       await expect(stakingRewards.notifyRewardAmount(rewardsToken2.address, toWei('10'))).to.be.revertedWith('reward token not supported');
+    });
+
+    it('fails to notify reward amount for rate too high', async () => {
+      await expect(stakingRewards.notifyRewardAmount(rewardsToken1.address, toWei('10'))).to.be.revertedWith('reward rate too high');
     });
 
     it('fails to notify reward amount for non-admin', async () => {
@@ -283,6 +289,7 @@ describe('StakingRewards', async () => {
       await Promise.all([
         stakingRewards.setBlockTimestamp(blockTimestamp),
         stakingRewards.addRewardsToken(rewardsToken1.address, SEVEN_DAYS),
+        rewardsToken1.transfer(stakingRewards.address, toWei('100'))
       ]);
 
       await stakingRewards.notifyRewardAmount(rewardsToken1.address, toWei('10'));
