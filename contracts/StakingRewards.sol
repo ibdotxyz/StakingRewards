@@ -7,8 +7,14 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./interfaces/StakingRewardsInterface.sol";
 
-contract StakingRewards is Ownable, Pausable, ReentrancyGuard {
+contract StakingRewards is
+    Ownable,
+    Pausable,
+    ReentrancyGuard,
+    StakingRewardsInterface
+{
     using SafeERC20 for IERC20;
 
     /* ========== STATE VARIABLES ========== */
