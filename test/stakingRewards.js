@@ -107,7 +107,7 @@ describe('StakingRewards', async () => {
     });
   });
 
-  describe('getReward', async () => {
+  describe('getReward / getRewardFor', async () => {
     beforeEach(async () => {
       const blockTimestamp = 100000;
       await Promise.all([
@@ -141,8 +141,8 @@ describe('StakingRewards', async () => {
       expect(user2Reward2Earned).to.eq('55114638447971320'); // 1000 / (86400*7) * 50e18 * 2/3
 
       await Promise.all([
-        stakingRewards.connect(user1).getReward(user1Address),
-        stakingRewards.connect(user2).getReward(user2Address)
+        stakingRewards.connect(user1).getReward(),
+        stakingRewards.connect(user2).getReward()
       ]);
       expect(await rewardsToken1.balanceOf(user1Address)).to.eq('5511463844797000');
       expect(await rewardsToken1.balanceOf(user2Address)).to.eq('11022927689594000');
@@ -163,8 +163,8 @@ describe('StakingRewards', async () => {
       await stakingRewards.setBlockTimestamp(blockTimestamp);
 
       await Promise.all([
-        stakingRewards.connect(user1).getReward(user1Address),
-        stakingRewards.connect(user2).getReward(user2Address),
+        stakingRewards.connect(user1).getReward(),
+        stakingRewards.connect(user2).getReward(),
       ]);
       expect(await rewardsToken1.balanceOf(user1Address)).to.eq('17912257495590240'); // 1000 / (86400*7) * 10e18 * 1/3 + 1500 / (86400*7) * 10e18 * 1/2
       expect(await rewardsToken1.balanceOf(user2Address)).to.eq('23423721340387240'); // 1000 / (86400*7) * 10e18 * 2/3 + 1500 / (86400*7) * 10e18 * 1/2
@@ -185,11 +185,34 @@ describe('StakingRewards', async () => {
       await stakingRewards.setBlockTimestamp(blockTimestamp);
 
       await Promise.all([
-        stakingRewards.connect(user1).getReward(user1Address),
-        stakingRewards.connect(user2).getReward(user2Address),
+        stakingRewards.connect(user1).getReward(),
+        stakingRewards.connect(user2).getReward(),
       ]);
       expect(await rewardsToken1.balanceOf(user1Address)).to.eq('30299381841213000'); // 1000 / (86400*7) * 10e18 * 1/3 + 1500 / (86400*7) * (20e18 + ((86400*7 - 1000) / (86400*7) * 10e18)) * 1/3
       expect(await rewardsToken1.balanceOf(user2Address)).to.eq('60598763682426000'); // 1000 / (86400*7) * 10e18 * 2/3 + 1500 / (86400*7) * (20e18 + ((86400*7 - 1000) / (86400*7) * 10e18)) * 2/3
+    });
+
+    it('gets rewards for successfully', async () => {
+      await stakingRewards.setHelperContract(adminAddress);
+
+      await stakingRewards.connect(user1).stake(toWei('10'));
+      await stakingRewards.connect(user2).stake(toWei('20'));
+
+      const blockTimestamp = 101000;
+      await stakingRewards.setBlockTimestamp(blockTimestamp);
+
+      await Promise.all([
+        stakingRewards.getRewardFor(user1Address),
+        stakingRewards.getRewardFor(user2Address),
+      ]);
+      expect(await rewardsToken1.balanceOf(user1Address)).to.eq('5511463844797000');
+      expect(await rewardsToken1.balanceOf(user2Address)).to.eq('11022927689594000');
+      expect(await rewardsToken2.balanceOf(user1Address)).to.eq('27557319223985660');
+      expect(await rewardsToken2.balanceOf(user2Address)).to.eq('55114638447971320');
+    });
+
+    it('fails to get rewards for not helper contract', async () => {
+      await expect(stakingRewards.getRewardFor(user1Address)).to.be.revertedWith('unauthorized');
     });
   });
 
@@ -349,6 +372,17 @@ describe('StakingRewards', async () => {
 
     it('fails to add rewards token for non-admin', async () => {
       await expect(stakingRewards.connect(user1).addRewardsToken(rewardsToken1.address, SEVEN_DAYS)).to.be.revertedWith('Ownable: caller is not the owner');
+    });
+  });
+
+  describe('setHelperContract', async () => {
+    it('sets helper contract successfully', async () => {
+      await stakingRewards.setHelperContract(adminAddress);
+      expect(await stakingRewards.helperContract()).to.eq(adminAddress);
+    });
+
+    it('fails to set helper contract for non-admin', async () => {
+      await expect(stakingRewards.connect(user1).setHelperContract(adminAddress)).to.be.revertedWith('Ownable: caller is not the owner');
     });
   });
 });

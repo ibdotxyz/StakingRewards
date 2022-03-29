@@ -49,6 +49,9 @@ contract StakingRewards is
     /// @notice The unclaimed rewards to users of every reward token
     mapping(address => mapping(address => uint256)) public rewards;
 
+    /// @notice The helper contract that could get rewards for users
+    address public helperContract;
+
     /// @notice The total amount of the staking token staked in the contract
     uint256 private _totalSupply;
 
@@ -162,6 +165,14 @@ contract StakingRewards is
     }
 
     /**
+     * @notice Return the amount of reward tokens.
+     * @return The amount of reward tokens
+     */
+    function getRewardsTokenCount() external view returns (uint256) {
+        return rewardsTokens.length;
+    }
+
+    /**
      * @notice Return the current block timestamp.
      * @return The current block timestamp
      */
@@ -224,14 +235,27 @@ contract StakingRewards is
     }
 
     /**
+     * @notice Claim rewards for the message sender.
+     */
+    function getReward() public nonReentrant updateReward(msg.sender) {
+        _getReward(msg.sender);
+    }
+
+    /**
      * @notice Claim rewards for an account.
+     * @dev This function is useful for helper contract to claim rewards for users.
      * @param account The user address
      */
-    function getReward(address account)
-        public
+    function getRewardFor(address account)
+        external
         nonReentrant
         updateReward(account)
     {
+        require(msg.sender == helperContract, "unauthorized");
+        _getReward(account);
+    }
+
+    function _getReward(address account) internal {
         for (uint256 i = 0; i < rewardsTokens.length; i++) {
             uint256 reward = rewards[rewardsTokens[i]][account];
             uint256 remain = IERC20(rewardsTokens[i]).balanceOf(address(this));
@@ -248,7 +272,7 @@ contract StakingRewards is
      */
     function exit() external {
         withdraw(_balances[msg.sender]);
-        getReward(msg.sender);
+        getReward();
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
@@ -351,6 +375,15 @@ contract StakingRewards is
     }
 
     /**
+     * @notice Set the helper contract.
+     * @param helper The helper contract address
+     */
+    function setHelperContract(address helper) external onlyOwner {
+        helperContract = helper;
+        emit HelperContractSet(helper);
+    }
+
+    /**
      * @notice Pause the staking.
      */
     function pause() external onlyOwner {
@@ -430,4 +463,9 @@ contract StakingRewards is
      * @notice Emitted when a reward token is added
      */
     event RewardsTokenAdded(address rewardsToken);
+
+    /**
+     * @notice Emitted when new helper contract is set
+     */
+    event HelperContractSet(address helper);
 }
