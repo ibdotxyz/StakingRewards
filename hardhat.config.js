@@ -3,6 +3,7 @@
  */
 require("@nomiclabs/hardhat-waffle");
 require('@nomiclabs/hardhat-ethers');
+require('./tasks/deploy-staking-reward');
 
 module.exports = {
   solidity: {
