@@ -44,7 +44,33 @@ describe('StakingRewardsFactory', async () => {
     expect(await stakingRewards3.owner()).to.eq(adminAddress);
   });
 
-  it('fails to create staking rewards contract', async () => {
-    await expect(stakingRewardsFactory.connect(user1).createStakingRewards([stakingToken1.address])).to.be.revertedWith('Ownable: caller is not the owner')
+  it('fails to create staking rewards contract for non-admin', async () => {
+    await expect(stakingRewardsFactory.connect(user1).createStakingRewards([stakingToken1.address])).to.be.revertedWith('Ownable: caller is not the owner');
+  });
+
+  it('fails to create staking rewards contract for already exist', async () => {
+    await stakingRewardsFactory.createStakingRewards([stakingToken1.address]);
+    await expect(stakingRewardsFactory.createStakingRewards([stakingToken1.address])).to.be.revertedWith('staking rewards contract already exist');
+  });
+
+  it('removes staking rewards contract', async () => {
+    await stakingRewardsFactory.createStakingRewards([stakingToken1.address, stakingToken2.address, stakingToken3.address]);
+    await stakingRewardsFactory.removeStakingRewards(stakingToken2.address);
+
+    expect(await stakingRewardsFactory.getStakingRewardsCount()).to.eq(2);
+    const stakingRewards1Address = await stakingRewardsFactory.stakingRewardsMap(stakingToken1.address);
+    expect(await stakingRewardsFactory.stakingRewards(0)).to.eq(stakingRewards1Address);
+    const stakingRewards2Address = await stakingRewardsFactory.stakingRewardsMap(stakingToken2.address);
+    expect(stakingRewards2Address).to.eq(ethers.constants.AddressZero);
+    const stakingRewards3Address = await stakingRewardsFactory.stakingRewardsMap(stakingToken3.address);
+    expect(await stakingRewardsFactory.stakingRewards(1)).to.eq(stakingRewards3Address);
+  });
+
+  it('fails to remove staking rewards contract for non-admin', async () => {
+    await expect(stakingRewardsFactory.connect(user1).removeStakingRewards(stakingToken1.address)).to.be.revertedWith('Ownable: caller is not the owner');
+  });
+
+  it('fails to remove staking rewards contract for not exist', async () => {
+    await expect(stakingRewardsFactory.removeStakingRewards(stakingToken1.address)).to.be.revertedWith('staking rewards contract not exist');
   });
 });

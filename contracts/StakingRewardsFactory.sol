@@ -21,6 +21,11 @@ contract StakingRewardsFactory is Ownable {
     );
 
     /**
+     * @notice Emitted when a staking rewards contract is removed
+     */
+    event StakingRewardsRemoved(address indexed stakingToken);
+
+    /**
      * @notice Return the amount of staking reward contracts.
      * @return The amount of staking reward contracts
      */
@@ -37,6 +42,10 @@ contract StakingRewardsFactory is Ownable {
         onlyOwner
     {
         for (uint256 i = 0; i < stakingTokens.length; i++) {
+            require(
+                stakingRewardsMap[stakingTokens[i]] == address(0),
+                "staking rewards contract already exist"
+            );
             StakingRewards sr = new StakingRewards(stakingTokens[i]);
             sr.transferOwnership(msg.sender);
 
@@ -44,5 +53,27 @@ contract StakingRewardsFactory is Ownable {
             stakingRewardsMap[stakingTokens[i]] = address(sr);
             emit StakingRewardsCreated(address(sr), stakingTokens[i]);
         }
+    }
+
+    /**
+     * @notice Remove a staking reward contract.
+     * @param stakingToken The staking token
+     */
+    function removeStakingRewards(address stakingToken) external onlyOwner {
+        require(
+            stakingRewardsMap[stakingToken] != address(0),
+            "staking rewards contract not exist"
+        );
+
+        for (uint256 i = 0; i < stakingRewards.length; i++) {
+            if (stakingRewardsMap[stakingToken] == stakingRewards[i]) {
+                stakingRewards[i] = stakingRewards[stakingRewards.length - 1];
+                delete stakingRewards[stakingRewards.length - 1];
+                stakingRewards.pop();
+                break;
+            }
+        }
+        stakingRewardsMap[stakingToken] = address(0);
+        emit StakingRewardsRemoved(stakingToken);
     }
 }
