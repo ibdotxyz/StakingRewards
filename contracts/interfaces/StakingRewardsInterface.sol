@@ -22,10 +22,21 @@ interface StakingRewardsInterface {
         view
         returns (uint256);
 
+    function getRewardRate(address _rewardsToken)
+        external
+        view
+        returns (uint256);
+
     function getRewardForDuration(address _rewardsToken)
         external
         view
         returns (uint256);
+
+    function getRewardsTokenCount() external view returns (uint256);
+
+    function getAllRewardsTokens() external view returns (address[] memory);
+
+    function getStakingToken() external view returns (address);
 
     function stake(uint256 amount) external;
 
