@@ -33,7 +33,7 @@ describe('StakingRewards', async () => {
     randomToken = await tokenFactory.deploy();
 
     const stakingRewardsFactory = await ethers.getContractFactory('MockStakingRewards');
-    stakingRewards = await stakingRewardsFactory.deploy(stakingToken.address);
+    stakingRewards = await stakingRewardsFactory.deploy(stakingToken.address, ethers.constants.AddressZero);
 
     await Promise.all([
       stakingToken.transfer(user1Address, toWei('100')),
