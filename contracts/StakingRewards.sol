@@ -60,8 +60,9 @@ contract StakingRewards is
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(address _stakingToken) {
+    constructor(address _stakingToken, address _helperContract) {
         stakingToken = IERC20(_stakingToken);
+        helperContract = _helperContract;
     }
 
     /* ========== VIEWS ========== */
@@ -152,6 +153,19 @@ contract StakingRewards is
     }
 
     /**
+     * @notice Return the reward rate.
+     * @param _rewardsToken The reward token address
+     * @return The reward rate
+     */
+    function getRewardRate(address _rewardsToken)
+        external
+        view
+        returns (uint256)
+    {
+        return rewardRate[_rewardsToken];
+    }
+
+    /**
      * @notice Return the reward token for duration.
      * @param _rewardsToken The reward token address
      * @return The reward token amount
@@ -170,6 +184,22 @@ contract StakingRewards is
      */
     function getRewardsTokenCount() external view returns (uint256) {
         return rewardsTokens.length;
+    }
+
+    /**
+     * @notice Return all the reward tokens.
+     * @return All the reward tokens
+     */
+    function getAllRewardsTokens() external view returns (address[] memory) {
+        return rewardsTokens;
+    }
+
+    /**
+     * @notice Return the staking token.
+     * @return The staking token
+     */
+    function getStakingToken() external view returns (address) {
+        return address(stakingToken);
     }
 
     /**
