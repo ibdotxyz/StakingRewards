@@ -1,9 +1,10 @@
 module.exports = async ({getNamedAccounts, deployments}) => {
-  const {deploy} = deployments;
-  const {multisig} = await getNamedAccounts();
+  const {deploy, execute} = deployments;
+  const {deployer, multisig} = await getNamedAccounts();
   await deploy('StakingRewardsFactory', {
-    from: multisig,
+    from: deployer,
     log: true,
   });
+  await execute('StakingRewardsFactory', { from: deployer}, 'transferOwnership', multisig);
 };
 module.exports.tags = ['StakingRewardsFactory'];

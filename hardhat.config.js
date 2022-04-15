@@ -5,6 +5,7 @@ require("@nomiclabs/hardhat-waffle");
 require('@nomiclabs/hardhat-ethers');
 require('hardhat-deploy');
 require('./tasks/deploy-staking-reward');
+require('dotenv').config();
 
 module.exports = {
   solidity: {
@@ -17,14 +18,16 @@ module.exports = {
     }
   },
   namedAccounts: {
+    deployer: 0,
     multisig: {
-      hardhat: '0x197939c1ca20C2b506d6811d8B6CDB3394471074',
-      mainnet: '0xA5fC0BbfcD05827ed582869b7254b6f141BA84Eb',
+      ftm: '0xA5fC0BbfcD05827ed582869b7254b6f141BA84Eb',
     },
   },
   networks: {
     ftm: {
-      url: 'https://rpc.ftm.tools',
-    }
+      url: 'https://rpc.ftm.tools/',
+      accounts:
+        process.env.DEPLOY_PRIVATE_KEY == undefined ? [] : [`0x${process.env.DEPLOY_PRIVATE_KEY}`]
+    },
   }
 };
