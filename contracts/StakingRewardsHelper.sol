@@ -198,17 +198,69 @@ contract StakingRewardsHelper is Ownable {
         address stakingRewards = factory.getStakingRewards(stakingToken);
         require(stakingRewards != address(0), "staking rewards not exist");
 
-        // Mint
+        // Get funds from user.
         IERC20(underlying).safeTransferFrom(msg.sender, address(this), amount);
+
+        // Mint
         IERC20(underlying).approve(stakingToken, amount);
         require(ITokenInterface(stakingToken).mint(amount) == 0, "mint failed");
 
-        // Stake
+        // Stake to staking rewards.
         uint256 balance = IERC20(stakingToken).balanceOf(address(this));
         IERC20(stakingToken).approve(stakingRewards, balance);
         StakingRewardsInterface(stakingRewards).stakeFor(msg.sender, balance);
 
         assert(IERC20(stakingToken).balanceOf(address(this)) == 0);
+    }
+
+    /**
+     * @notice Unstake tokens from staking rewards and redeem
+     * @param stakingRewards The staking rewards
+     * @param amount The amount
+     */
+    function unstake(address stakingRewards, uint256 amount) public {
+        require(amount > 0, "invalid amount");
+        address stakingToken = StakingRewardsInterface(stakingRewards)
+            .getStakingToken();
+        require(stakingToken != address(0), "invalid staking token");
+        address underlying = ITokenInterface(stakingToken).underlying();
+        require(underlying != address(0), "invalid underlying");
+
+        // Withdraw from staking rewards.
+        StakingRewardsInterface(stakingRewards).withdrawFor(msg.sender, amount);
+
+        // Redeem
+        require(
+            ITokenInterface(stakingToken).redeem(amount) == 0,
+            "redeem failed"
+        );
+
+        // Send funds to user.
+        uint256 balance = IERC20(underlying).balanceOf(address(this));
+        IERC20(underlying).transfer(msg.sender, balance);
+
+        assert(IERC20(underlying).balanceOf(address(this)) == 0);
+    }
+
+    /**
+     * @notice Exit all staking rewards
+     */
+    function exitAll() public {
+        address[] memory allStakingRewards = factory.getAllStakingRewards();
+        exit(allStakingRewards);
+    }
+
+    /**
+     * @notice Exit staking rewards
+     * @param stakingRewards The list of staking rewards
+     */
+    function exit(address[] memory stakingRewards) public {
+        for (uint256 i = 0; i < stakingRewards.length; i++) {
+            uint256 balance = StakingRewardsInterface(stakingRewards[i])
+                .balanceOf(msg.sender);
+            unstake(stakingRewards[i], balance);
+            StakingRewardsInterface(stakingRewards[i]).getRewardFor(msg.sender);
+        }
     }
 
     /**

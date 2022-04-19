@@ -101,6 +101,35 @@ describe('StakingRewardsHelper', async () => {
     });
   });
 
+  describe('unstake', async () => {
+    it('unstakes successfully', async () => {
+      await token1.connect(user1).approve(stakingRewardsHelper.address, toWei('100'));
+      await stakingRewardsHelper.connect(user1).stake(token1.address, toWei('100'));
+
+      expect(await stakingRewards1.balanceOf(user1Address)).to.eq(toWei('200')); // 100 * 2
+
+      await stakingRewardsHelper.connect(user1).unstake(stakingRewards1.address, toWei('200'));
+
+      // 100 token1 transfer from stakingToken1 to user1
+      expect(await token1.balanceOf(user1Address)).to.eq(toWei('100'));
+      expect(await token1.balanceOf(stakingRewardsHelper.address)).to.eq(0);
+      expect(await token1.balanceOf(stakingToken1.address)).to.eq(0);
+
+      // 200 stakingToken1 burn
+      expect(await stakingToken1.balanceOf(stakingRewardsHelper.address)).to.eq(0);
+      expect(await stakingToken1.balanceOf(stakingRewards1.address)).to.eq(0);
+    });
+
+    it('fails to unstake for redeem failure', async () => {
+      await token1.connect(user1).approve(stakingRewardsHelper.address, toWei('100'));
+      await stakingRewardsHelper.connect(user1).stake(token1.address, toWei('100'));
+
+      await stakingToken1.setRedeemFailed();
+
+      await expect(stakingRewardsHelper.connect(user1).unstake(stakingRewards1.address, toWei('200'))).to.be.revertedWith('redeem faile');
+    });
+  });
+
   describe('claimAllRewards / claimRewards / getUserClaimableRewards / getUserStaked', async () => {
     beforeEach(async () => {
       await Promise.all([
@@ -137,6 +166,44 @@ describe('StakingRewardsHelper', async () => {
 
       expect(await stakingRewards1.earned(rewardsToken.address, user1Address)).to.eq(0);
       expect(await stakingRewards2.earned(rewardsToken.address, user1Address)).to.gt(0);
+    });
+
+    it('exits all successfully', async () => {
+      await stakingRewardsHelper.connect(user1).exitAll();
+
+      // Note: there are 3 - 5 seconds delay caused by 'evm_mine' in the following calculation.
+      const bal = await rewardsToken.balanceOf(user1Address);
+      expect(bal).to.gt(toWei('0.1785')); // 3600 / (86400*7) * 10e18 + 3600 / (86400*7) * 20e18
+      expect(bal).to.lt(toWei('0.1789'));
+
+      expect(await stakingRewards1.earned(rewardsToken.address, user1Address)).to.eq(0);
+      expect(await stakingRewards2.earned(rewardsToken.address, user1Address)).to.eq(0);
+
+      expect(await stakingRewards1.balanceOf(user1Address)).to.eq(0);
+      expect(await stakingRewards2.balanceOf(user1Address)).to.eq(0);
+      expect(await token1.balanceOf(user1Address)).to.eq(toWei('100'));
+      expect(await token1.balanceOf(stakingToken1.address)).to.eq(0);
+      expect(await token2.balanceOf(user1Address)).to.eq(toWei('100'));
+      expect(await token2.balanceOf(stakingToken2.address)).to.eq(0);
+    });
+
+    it('exits some successfully', async () => {
+      await stakingRewardsHelper.connect(user1).exit([stakingRewards1.address]);
+
+      // Note: there are 3 - 5 seconds delay caused by 'evm_mine' in the following calculation.
+      const bal = await rewardsToken.balanceOf(user1Address);
+      expect(bal).to.gt(toWei('0.0595')); // 3600 / (86400*7) * 10e18
+      expect(bal).to.lt(toWei('0.0597'));
+
+      expect(await stakingRewards1.earned(rewardsToken.address, user1Address)).to.eq(0);
+      expect(await stakingRewards2.earned(rewardsToken.address, user1Address)).to.gt(0);
+
+      expect(await stakingRewards1.balanceOf(user1Address)).to.eq(0);
+      expect(await stakingRewards2.balanceOf(user1Address)).to.eq(toWei('200'));
+      expect(await token1.balanceOf(user1Address)).to.eq(toWei('100'));
+      expect(await token1.balanceOf(stakingToken1.address)).to.eq(0);
+      expect(await token2.balanceOf(user1Address)).to.eq(0);
+      expect(await token2.balanceOf(stakingToken2.address)).to.eq(toWei('100'));
     });
 
     it('gets user claimable rewards', async () => {

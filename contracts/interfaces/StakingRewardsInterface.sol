@@ -44,6 +44,8 @@ interface StakingRewardsInterface {
 
     function withdraw(uint256 amount) external;
 
+    function withdrawFor(address account, uint256 amount) external;
+
     function getReward() external;
 
     function getRewardFor(address account) external;

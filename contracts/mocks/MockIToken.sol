@@ -13,6 +13,7 @@ contract MockIToken is ERC20, ITokenInterface {
     uint256 private _supplyRate;
     uint256 private _exchangeRate;
     bool private mintFailed;
+    bool private redeemFailed;
 
     constructor(address underlying_) ERC20("Mock Token", "Mock") {
         _mint(msg.sender, 10000**uint256(decimals()));
@@ -55,6 +56,21 @@ contract MockIToken is ERC20, ITokenInterface {
         );
         uint256 amount = (mintAmount * _exchangeRate) / 1e18;
         _mint(msg.sender, amount);
+        return 0;
+    }
+
+    function setRedeemFailed() external {
+        redeemFailed = true;
+    }
+
+    function redeem(uint256 redeemTokens) external returns (uint256) {
+        if (redeemFailed) {
+            return 1; // Return non-zero to simulate graceful failure.
+        }
+
+        _burn(msg.sender, redeemTokens);
+        uint256 amount = (redeemTokens * 1e18) / _exchangeRate;
+        IERC20(_underlying).safeTransfer(msg.sender, amount);
         return 0;
     }
 }
