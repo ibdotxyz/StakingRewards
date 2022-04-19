@@ -67,6 +67,8 @@ describe('StakingRewards', async () => {
 
   describe('stakeFor', async () => {
     it('stakes for successfully', async () => {
+      await stakingRewards.setHelperContract(adminAddress);
+
       await stakingToken.approve(stakingRewards.address, toWei('30'));
 
       await stakingRewards.stakeFor(user1Address, toWei('10'));
@@ -83,11 +85,17 @@ describe('StakingRewards', async () => {
       await expect(stakingRewards.stakeFor(user1Address, toWei('10'))).to.be.revertedWith('Pausable: paused');
     });
 
+    it('fails to stake for not helper contract', async () => {
+      await expect(stakingRewards.stakeFor(user1Address, toWei('10'))).to.be.revertedWith('unauthorized');
+    });
+
     it('fails to stake for invalid amount', async () => {
+      await stakingRewards.setHelperContract(adminAddress);
       await expect(stakingRewards.stakeFor(user1Address, 0)).to.be.revertedWith('invalid amount');
     });
 
     it('fails to stake for invalid account', async () => {
+      await stakingRewards.setHelperContract(adminAddress);
       await expect(stakingRewards.stakeFor(ethers.constants.AddressZero, toWei('10'))).to.be.revertedWith('invalid account');
     });
   });
@@ -102,8 +110,35 @@ describe('StakingRewards', async () => {
       expect(await stakingRewards.balanceOf(user1Address)).to.eq(0);
     });
 
-    it('fails to stake for invalid amount', async () => {
+    it('fails to withdraw for invalid amount', async () => {
       await expect(stakingRewards.connect(user1).withdraw(0)).to.be.revertedWith('invalid amount');
+    });
+  });
+
+  describe('withdrawFor', async () => {
+    it('withdraws for successfully', async () => {
+      await stakingRewards.setHelperContract(adminAddress);
+
+      await stakingToken.connect(user1).approve(stakingRewards.address, toWei('10'));
+      await stakingRewards.connect(user1).stake(toWei('10'));
+
+      await stakingRewards.withdrawFor(user1Address, toWei('10'));
+      expect(await stakingRewards.totalSupply()).to.eq(0);
+      expect(await stakingRewards.balanceOf(user1Address)).to.eq(0);
+    });
+
+    it('fails to withdraw for not helper contract', async () => {
+      await expect(stakingRewards.withdrawFor(user1Address, 0)).to.be.revertedWith('unauthorized');
+    });
+
+    it('fails to withdraw for invalid amount', async () => {
+      await stakingRewards.setHelperContract(adminAddress);
+      await expect(stakingRewards.withdrawFor(user1Address, 0)).to.be.revertedWith('invalid amount');
+    });
+
+    it('fails to stake for invalid account', async () => {
+      await stakingRewards.setHelperContract(adminAddress);
+      await expect(stakingRewards.withdrawFor(ethers.constants.AddressZero, toWei('10'))).to.be.revertedWith('invalid account');
     });
   });
 
@@ -213,6 +248,11 @@ describe('StakingRewards', async () => {
 
     it('fails to get rewards for not helper contract', async () => {
       await expect(stakingRewards.getRewardFor(user1Address)).to.be.revertedWith('unauthorized');
+    });
+
+    it('fails to get rewards for invalid account', async () => {
+      await stakingRewards.setHelperContract(adminAddress);
+      await expect(stakingRewards.getRewardFor(ethers.constants.AddressZero)).to.be.revertedWith('invalid account');
     });
   });
 

@@ -49,7 +49,7 @@ contract StakingRewards is
     /// @notice The unclaimed rewards to users of every reward token
     mapping(address => mapping(address => uint256)) public rewards;
 
-    /// @notice The helper contract that could get rewards for users
+    /// @notice The helper contract that could stake, withdraw and claim rewards for users
     address public helperContract;
 
     /// @notice The total amount of the staking token staked in the contract
@@ -222,11 +222,7 @@ contract StakingRewards is
         whenNotPaused
         updateReward(msg.sender)
     {
-        require(amount > 0, "invalid amount");
-        _totalSupply = _totalSupply + amount;
-        _balances[msg.sender] = _balances[msg.sender] + amount;
-        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
-        emit Staked(msg.sender, amount);
+        _stakeFor(msg.sender, amount);
     }
 
     /**
@@ -240,7 +236,12 @@ contract StakingRewards is
         whenNotPaused
         updateReward(account)
     {
+        require(msg.sender == helperContract, "unauthorized");
         require(account != address(0), "invalid account");
+        _stakeFor(account, amount);
+    }
+
+    function _stakeFor(address account, uint256 amount) internal {
         require(amount > 0, "invalid amount");
         _totalSupply = _totalSupply + amount;
         _balances[account] = _balances[account] + amount;
@@ -257,35 +258,56 @@ contract StakingRewards is
         nonReentrant
         updateReward(msg.sender)
     {
+        _withdrawFor(msg.sender, amount);
+    }
+
+    /**
+     * @notice Withdraw the staked token for other user.
+     * @dev This function can only be called by helper.
+     * @param account The user address
+     * @param amount The amount of the staking token
+     */
+    function withdrawFor(address account, uint256 amount)
+        public
+        nonReentrant
+        updateReward(account)
+    {
+        require(msg.sender == helperContract, "unauthorized");
+        require(account != address(0), "invalid account");
+        _withdrawFor(account, amount);
+    }
+
+    function _withdrawFor(address account, uint256 amount) internal {
         require(amount > 0, "invalid amount");
         _totalSupply = _totalSupply - amount;
-        _balances[msg.sender] = _balances[msg.sender] - amount;
+        _balances[account] = _balances[account] - amount;
         stakingToken.safeTransfer(msg.sender, amount);
-        emit Withdrawn(msg.sender, amount);
+        emit Withdrawn(account, amount);
     }
 
     /**
      * @notice Claim rewards for the message sender.
      */
     function getReward() public nonReentrant updateReward(msg.sender) {
-        _getReward(msg.sender);
+        _getRewardFor(msg.sender);
     }
 
     /**
      * @notice Claim rewards for an account.
-     * @dev This function is useful for helper contract to claim rewards for users.
+     * @dev This function can only be called by helper.
      * @param account The user address
      */
     function getRewardFor(address account)
-        external
+        public
         nonReentrant
         updateReward(account)
     {
         require(msg.sender == helperContract, "unauthorized");
-        _getReward(account);
+        require(account != address(0), "invalid account");
+        _getRewardFor(account);
     }
 
-    function _getReward(address account) internal {
+    function _getRewardFor(address account) internal {
         for (uint256 i = 0; i < rewardsTokens.length; i++) {
             uint256 reward = rewards[rewardsTokens[i]][account];
             uint256 remain = IERC20(rewardsTokens[i]).balanceOf(address(this));
