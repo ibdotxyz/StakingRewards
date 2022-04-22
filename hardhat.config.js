@@ -20,11 +20,11 @@ module.exports = {
   namedAccounts: {
     deployer: 0,
     multisig: {
-      ftm: '0xA5fC0BbfcD05827ed582869b7254b6f141BA84Eb',
+      fantom: '0xA5fC0BbfcD05827ed582869b7254b6f141BA84Eb',
     },
   },
   networks: {
-    ftm: {
+    fantom: {
       url: 'https://rpc.ftm.tools/',
       accounts:
         process.env.DEPLOY_PRIVATE_KEY == undefined ? [] : [`0x${process.env.DEPLOY_PRIVATE_KEY}`]
