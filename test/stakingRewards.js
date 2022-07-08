@@ -405,6 +405,10 @@ describe('StakingRewards', async () => {
       expect(await stakingRewards.rewardsTokensMap(rewardsToken1.address)).to.eq(true);
     });
 
+    it('fails to add rewards token for it is staking token', async () => {
+      await expect(stakingRewards.addRewardsToken(stakingToken.address, SEVEN_DAYS)).to.be.revertedWith('rewards token cannot be staking token');
+    });
+
     it('fails to add rewards token for already added', async () => {
       await stakingRewards.addRewardsToken(rewardsToken1.address, SEVEN_DAYS);
       await expect(stakingRewards.addRewardsToken(rewardsToken1.address, SEVEN_DAYS)).to.be.revertedWith('rewards token already supported');

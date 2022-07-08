@@ -415,6 +415,10 @@ contract StakingRewards is
         onlyOwner
     {
         require(
+            address(stakingToken) != rewardsToken,
+            "rewards token cannot be staking token"
+        );
+        require(
             !rewardsTokensMap[rewardsToken],
             "rewards token already supported"
         );
