@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/ITokenInterface.sol";
+import "./interfaces/IWrappedNative.sol";
 import "./interfaces/StakingRewardsInterface.sol";
 import "./interfaces/StakingRewardsFactoryInterface.sol";
 
@@ -14,6 +15,7 @@ contract StakingRewardsHelper is Ownable {
     using SafeERC20 for IERC20;
 
     StakingRewardsFactoryInterface public immutable factory;
+    address public immutable wrappedNative;
 
     /**
      * @notice Emitted when tokens are seized
@@ -22,8 +24,9 @@ contract StakingRewardsHelper is Ownable {
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(address _factory) {
+    constructor(address _factory, address _wrappedNative) {
         factory = StakingRewardsFactoryInterface(_factory);
+        wrappedNative = _wrappedNative;
     }
 
     /* ========== VIEWS ========== */
@@ -213,6 +216,23 @@ contract StakingRewardsHelper is Ownable {
         assert(IERC20(stakingToken).balanceOf(address(this)) == 0);
     }
 
+    function stakeNative() payable external {
+        require(msg.value > 0, "invalid amount");
+        IWrappedNative(wrappedNative).deposit{value: msg.value}();
+
+        address stakingToken = factory.getStakingToken(wrappedNative);
+        require(stakingToken != address(0), "invalid staking token");
+        address stakingRewards = factory.getStakingRewards(stakingToken);
+        require(stakingRewards != address(0), "staking rewards not exist");
+
+        IERC20(wrappedNative).approve(stakingToken, msg.value);
+        require(ITokenInterface(stakingToken).mint(msg.value) == 0, "mint failed");
+
+        uint256 balance = IERC20(stakingToken).balanceOf(address(this));
+        IERC20(stakingToken).approve(stakingRewards, balance);
+        StakingRewardsInterface(stakingRewards).stakeFor(msg.sender, balance);
+    }
+
     /**
      * @notice Unstake tokens from staking rewards and redeem
      * @param stakingRewards The staking rewards
@@ -242,6 +262,32 @@ contract StakingRewardsHelper is Ownable {
         assert(IERC20(underlying).balanceOf(address(this)) == 0);
     }
 
+
+    function unstakeNative(uint256 amount) external {
+        require(amount > 0, "invalid amount");
+
+        address stakingToken = factory.getStakingToken(wrappedNative);
+        require(stakingToken != address(0), "invalid staking token");
+        address stakingRewards = factory.getStakingRewards(stakingToken);
+        require(stakingRewards != address(0), "staking rewards not exist");
+
+        // Withdraw from staking rewards.
+        StakingRewardsInterface(stakingRewards).withdrawFor(msg.sender, amount);
+
+        // Redeem
+        require(
+            ITokenInterface(stakingToken).redeem(amount) == 0,
+            "redeem failed"
+        );
+
+        // Send funds to user.
+        uint256 balance = IERC20(wrappedNative).balanceOf(address(this));
+        IWrappedNative(wrappedNative).withdraw(balance);
+        (bool sent, ) = msg.sender.call{value: balance}("");
+        assert(sent);
+        assert(IERC20(wrappedNative).balanceOf(address(this)) == 0);
+    }
+
     /**
      * @notice Exit all staking rewards
      */
@@ -258,8 +304,10 @@ contract StakingRewardsHelper is Ownable {
         for (uint256 i = 0; i < stakingRewards.length; i++) {
             uint256 balance = StakingRewardsInterface(stakingRewards[i])
                 .balanceOf(msg.sender);
-            unstake(stakingRewards[i], balance);
-            StakingRewardsInterface(stakingRewards[i]).getRewardFor(msg.sender);
+            if (balance > 0) {
+                unstake(stakingRewards[i], balance);
+                StakingRewardsInterface(stakingRewards[i]).getRewardFor(msg.sender);
+            }
         }
     }
 
@@ -292,4 +340,6 @@ contract StakingRewardsHelper is Ownable {
         IERC20(token).safeTransfer(owner(), amount);
         emit TokenSeized(token, amount);
     }
+
+    receive() external payable {}
 }
