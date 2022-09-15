@@ -7,12 +7,9 @@ describe('StakingRewardsHelper', async () => {
   const exchangeRate = toWei('2');
 
   let token1, token2;
-  let wrappedNative;
   let rewardsToken;
   let stakingToken1, stakingToken2;
-  let stakingTokenWrappedNative;
   let stakingRewards1, stakingRewards2;
-  let stakingRewardsWrappedNative;
 
   let stakingRewardsHelper;
   let stakingRewardsFactory;
@@ -29,9 +26,6 @@ describe('StakingRewardsHelper', async () => {
     user1 = accounts[1];
     user1Address = await user1.getAddress();
 
-    const wrappedNativeFactory = await ethers.getContractFactory("WETH9");
-    wrappedNative = await wrappedNativeFactory.deploy();
-
     const tokenFactory = await ethers.getContractFactory('MockToken');
     token1 = await tokenFactory.deploy();
     token2 = await tokenFactory.deploy();
@@ -40,45 +34,39 @@ describe('StakingRewardsHelper', async () => {
     const iTokenFactory = await ethers.getContractFactory('MockIToken');
     stakingToken1 = await iTokenFactory.deploy(token1.address);
     stakingToken2 = await iTokenFactory.deploy(token2.address);
-    stakingTokenWrappedNative = await iTokenFactory.deploy(wrappedNative.address);
 
     // Set exchange rate.
     await Promise.all([
       stakingToken1.setExchangeRateStored(exchangeRate),
-      stakingToken2.setExchangeRateStored(exchangeRate),
-      stakingTokenWrappedNative.setExchangeRateStored(exchangeRate)
+      stakingToken2.setExchangeRateStored(exchangeRate)
     ]);
 
     const stakingRewardsFactoryFactory = await ethers.getContractFactory('StakingRewardsFactory');
     stakingRewardsFactory = await stakingRewardsFactoryFactory.deploy();
 
     const stakingRewardsHelperFactory = await ethers.getContractFactory('StakingRewardsHelper');
-    stakingRewardsHelper = await stakingRewardsHelperFactory.deploy(stakingRewardsFactory.address, wrappedNative.address);
+    stakingRewardsHelper = await stakingRewardsHelperFactory.deploy(stakingRewardsFactory.address);
 
     // Deploy 2 staking rewards contracts via factory.
-    await stakingRewardsFactory.createStakingRewards([stakingToken1.address, stakingToken2.address, stakingTokenWrappedNative.address], stakingRewardsHelper.address);
+    await stakingRewardsFactory.createStakingRewards([stakingToken1.address, stakingToken2.address], stakingRewardsHelper.address);
 
     stakingRewardsContractFactory = await ethers.getContractFactory('StakingRewards');
     const stakingRewards1Address = await stakingRewardsFactory.getStakingRewards(stakingToken1.address);
     stakingRewards1 = stakingRewardsContractFactory.attach(stakingRewards1Address);
     const stakingRewards2Address = await stakingRewardsFactory.getStakingRewards(stakingToken2.address);
     stakingRewards2 = stakingRewardsContractFactory.attach(stakingRewards2Address);
-    stakingRewardsWrappedNative = stakingRewardsContractFactory.attach(await stakingRewardsFactory.getStakingRewards(stakingTokenWrappedNative.address));
 
     // Setup rewards tokens for staking rewards contracts.
     await Promise.all([
       stakingRewards1.addRewardsToken(rewardsToken.address, SEVEN_DAYS),
       stakingRewards2.addRewardsToken(rewardsToken.address, SEVEN_DAYS),
-      stakingRewardsWrappedNative.addRewardsToken(rewardsToken.address, SEVEN_DAYS),
       rewardsToken.transfer(stakingRewards1.address, toWei('100')),
       rewardsToken.transfer(stakingRewards2.address, toWei('100')),
-      rewardsToken.transfer(stakingRewardsWrappedNative.address, toWei('100'))
     ]);
 
     await Promise.all([
       stakingRewards1.notifyRewardAmount(rewardsToken.address, toWei('10')),
-      stakingRewards2.notifyRewardAmount(rewardsToken.address, toWei('20')),
-      stakingRewardsWrappedNative.notifyRewardAmount(rewardsToken.address, toWei('20'))
+      stakingRewards2.notifyRewardAmount(rewardsToken.address, toWei('20'))
     ]);
 
     // Give user1 some underlying tokens.
@@ -113,30 +101,6 @@ describe('StakingRewardsHelper', async () => {
     });
   });
 
-  describe('stakeNative', async()=> {
-    it('stakes successfully', async () => {
-      await stakingRewardsHelper.connect(user1).stakeNative({value:toWei('100')});
-
-      expect(await stakingRewardsWrappedNative.balanceOf(user1Address)).to.eq(toWei('200')); // 100 * 2
-
-      // 100 token1 transfer from user1 to stakingToken1
-      expect(await wrappedNative.balanceOf(user1Address)).to.eq(0);
-      expect(await wrappedNative.balanceOf(stakingRewardsHelper.address)).to.eq(0);
-      expect(await wrappedNative.balanceOf(stakingTokenWrappedNative.address)).to.eq(toWei('100'));
-
-      // 200 stakingToken1 mint and transfer to stakingRewards1
-      expect(await stakingTokenWrappedNative.balanceOf(stakingRewardsHelper.address)).to.eq(0);
-      expect(await stakingTokenWrappedNative.balanceOf(stakingRewardsWrappedNative.address)).to.eq(toWei('200'));
-    });
-
-    it('fails to stake for mint failure', async () => {
-      await stakingTokenWrappedNative.setMintFailed();
-      await wrappedNative.connect(user1).deposit({value:toWei('100')});
-      await wrappedNative.connect(user1).approve(stakingRewardsHelper.address, toWei('100'));
-      await expect(stakingRewardsHelper.connect(user1).stakeNative({value:toWei('100')})).to.be.revertedWith('mint faile');
-    });
-  })
-
   describe('unstake', async () => {
     it('unstakes successfully', async () => {
       await token1.connect(user1).approve(stakingRewardsHelper.address, toWei('100'));
@@ -163,37 +127,6 @@ describe('StakingRewardsHelper', async () => {
       await stakingToken1.setRedeemFailed();
 
       await expect(stakingRewardsHelper.connect(user1).unstake(stakingRewards1.address, toWei('200'))).to.be.revertedWith('redeem faile');
-    });
-  });
-
-  describe('unstakeNative', async () => {
-    it('unstakes successfully', async () => {
-      await stakingRewardsHelper.connect(user1).stakeNative({value:toWei('100')});
-
-      expect(await stakingRewardsWrappedNative.balanceOf(user1Address)).to.eq(toWei('200')); // 100 * 2
-
-      const preUnstakeBalance = await waffle.provider.getBalance(user1Address);
-      const tx  = await stakingRewardsHelper.connect(user1).unstakeNative(toWei('200'));
-      const receipt = await tx.wait()
-      const gas = receipt.gasUsed.mul(tx.gasPrice);
-      const postUnstakeBalance = await waffle.provider.getBalance(user1Address);
-
-      // 100 token1 transfer from stakingToken1 to user1
-      expect(postUnstakeBalance.add(gas).sub(preUnstakeBalance)).to.eq(toWei('100'));
-      expect(await wrappedNative.balanceOf(stakingRewardsHelper.address)).to.eq(0);
-      expect(await wrappedNative.balanceOf(stakingToken1.address)).to.eq(0);
-
-      // 200 stakingToken1 burn
-      expect(await stakingTokenWrappedNative.balanceOf(stakingRewardsHelper.address)).to.eq(0);
-      expect(await stakingTokenWrappedNative.balanceOf(stakingRewards1.address)).to.eq(0);
-    });
-
-    it('fails to unstake for redeem failure', async () => {
-      await stakingRewardsHelper.connect(user1).stakeNative({value:toWei('100')});
-
-      await stakingTokenWrappedNative.setRedeemFailed();
-
-      await expect(stakingRewardsHelper.connect(user1).unstakeNative(toWei('200'))).to.be.revertedWith('redeem faile');
     });
   });
 
@@ -283,14 +216,11 @@ describe('StakingRewardsHelper', async () => {
 
     it('gets user staked', async () => {
       const userStaked = await stakingRewardsHelper.getUserStaked(user1Address);
-      expect(userStaked.length).to.eq(3);
+      expect(userStaked.length).to.eq(2);
       expect(userStaked[0].stakingTokenAddress).to.eq(stakingToken1.address);
       expect(userStaked[0].balance).to.eq(toWei('200'));
       expect(userStaked[1].stakingTokenAddress).to.eq(stakingToken2.address);
       expect(userStaked[1].balance).to.eq(toWei('200'));
-      expect(userStaked[2].stakingTokenAddress).to.eq(stakingTokenWrappedNative.address);
-      expect(userStaked[2].balance).to.eq(toWei('0'));
-      
     });
   });
 
@@ -336,7 +266,7 @@ describe('StakingRewardsHelper', async () => {
 
     it('gets staking info', async () => {
       const stakingInfo = await stakingRewardsHelper.getStakingInfo();
-      expect(stakingInfo.length).to.eq(3);
+      expect(stakingInfo.length).to.eq(2);
       expect(stakingInfo[0].stakingTokenAddress).to.eq(stakingToken1.address);
       expect(stakingInfo[0].totalSupply).to.eq(toWei('57.5')); // 50 * 1.15
       expect(stakingInfo[0].supplyRatePerBlock).to.eq(toWei('1.05'));
