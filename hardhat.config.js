@@ -20,14 +20,17 @@ module.exports = {
   namedAccounts: {
     deployer: 0,
     multisig: {
-      fantom: '0xA5fC0BbfcD05827ed582869b7254b6f141BA84Eb',
+      avalanche: '0xf3472A93B94A17dC20F9Dc9D0D48De42FfbD14f4',
     },
+    wrappedNative: {
+      avalanche: '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7',
+    }
   },
   networks: {
-    fantom: {
-      url: 'https://rpc.ftm.tools/',
-      accounts:
-        process.env.DEPLOY_PRIVATE_KEY == undefined ? [] : [`0x${process.env.DEPLOY_PRIVATE_KEY}`]
+    avalanche: {
+      url: 'https://api.avax.network/ext/bc/C/rpc',
+      chainId: 43114,
+      accounts: [`0x${process.env.DEPLOY_PRIVATE_KEY ?? ''}`]
     },
   }
 };

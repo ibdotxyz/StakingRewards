@@ -1,8 +1,7 @@
 module.exports = async ({getNamedAccounts, deployments}) => {
   const {deploy, get, execute} = deployments;
-  const {deployer, multisig} = await getNamedAccounts();
+  const {deployer, multisig, wrappedNative} = await getNamedAccounts();
   const stakingRewardsFactory = (await get('StakingRewardsFactory')).address;
-  const wrappedNative = "0x4200000000000000000000000000000000000006";
   await deploy('StakingRewardsHelper', {
     from: deployer,
     args: [stakingRewardsFactory, wrappedNative],
@@ -12,4 +11,4 @@ module.exports = async ({getNamedAccounts, deployments}) => {
   await execute('StakingRewardsHelper', { from: deployer}, 'transferOwnership', multisig);
 };
 module.exports.tags = ['StakingRewardsHelper'];
-module.exports.dependencies = ['StakingRewardsFactory'];
+//module.exports.dependencies = ['StakingRewardsFactory'];
