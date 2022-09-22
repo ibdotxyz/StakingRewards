@@ -3,6 +3,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -11,7 +12,7 @@ import "./interfaces/IWrappedNative.sol";
 import "./interfaces/StakingRewardsInterface.sol";
 import "./interfaces/StakingRewardsFactoryInterface.sol";
 
-contract StakingRewardsHelper is Ownable {
+contract StakingRewardsHelper is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     StakingRewardsFactoryInterface public immutable factory;
@@ -194,7 +195,7 @@ contract StakingRewardsHelper is Ownable {
      * @param underlying The underlying token
      * @param amount The amount
      */
-    function stake(address underlying, uint256 amount) public {
+    function stake(address underlying, uint256 amount) public nonReentrant {
         require(amount > 0, "invalid amount");
         address stakingToken = factory.getStakingToken(underlying);
         require(stakingToken != address(0), "invalid staking token");
@@ -219,7 +220,7 @@ contract StakingRewardsHelper is Ownable {
     /**
      * @notice Mint native and stake tokens into staking rewards
      */
-    function stakeNative() public payable {
+    function stakeNative() public payable nonReentrant {
         require(msg.value > 0, "invalid amount");
         address stakingToken = factory.getStakingToken(wrappedNative);
         require(stakingToken != address(0), "invalid staking token");
@@ -248,7 +249,7 @@ contract StakingRewardsHelper is Ownable {
         address stakingRewards,
         uint256 amount,
         bool toNative
-    ) public {
+    ) public nonReentrant {
         require(amount > 0, "invalid amount");
         address stakingToken = StakingRewardsInterface(stakingRewards)
             .getStakingToken();
@@ -323,7 +324,7 @@ contract StakingRewardsHelper is Ownable {
      * @notice Claim rewards by given staking rewards
      * @param stakingRewards The list of staking rewards
      */
-    function claimRewards(address[] memory stakingRewards) public {
+    function claimRewards(address[] memory stakingRewards) public nonReentrant {
         for (uint256 i = 0; i < stakingRewards.length; i++) {
             StakingRewardsInterface(stakingRewards[i]).getRewardFor(msg.sender);
         }
