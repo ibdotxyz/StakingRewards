@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/ITokenInterface.sol";
+import "../interfaces/IWrappedNative.sol";
 
 contract MockIToken is ERC20, ITokenInterface {
     using SafeERC20 for IERC20;
@@ -59,6 +60,17 @@ contract MockIToken is ERC20, ITokenInterface {
         return 0;
     }
 
+    function mintNative() external payable returns (uint256) {
+        if (mintFailed) {
+            return 1; // Return non-zero to simulate graceful failure.
+        }
+
+        IWrappedNative(_underlying).deposit{value: msg.value}();
+        uint256 amount = (msg.value * _exchangeRate) / 1e18;
+        _mint(msg.sender, amount);
+        return 0;
+    }
+
     function setRedeemFailed() external {
         redeemFailed = true;
     }
@@ -73,4 +85,19 @@ contract MockIToken is ERC20, ITokenInterface {
         IERC20(_underlying).safeTransfer(msg.sender, amount);
         return 0;
     }
+
+    function redeemNative(uint256 redeemTokens) external returns (uint256) {
+        if (redeemFailed) {
+            return 1; // Return non-zero to simulate graceful failure.
+        }
+
+        _burn(msg.sender, redeemTokens);
+        uint256 amount = (redeemTokens * 1e18) / _exchangeRate;
+        IWrappedNative(_underlying).withdraw(amount);
+        (bool sent, ) = msg.sender.call{value: amount}("");
+        assert(sent);
+        return 0;
+    }
+
+    receive() external payable {}
 }

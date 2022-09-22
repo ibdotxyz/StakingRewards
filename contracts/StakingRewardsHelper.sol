@@ -3,6 +3,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -11,7 +12,7 @@ import "./interfaces/IWrappedNative.sol";
 import "./interfaces/StakingRewardsInterface.sol";
 import "./interfaces/StakingRewardsFactoryInterface.sol";
 
-contract StakingRewardsHelper is Ownable {
+contract StakingRewardsHelper is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     StakingRewardsFactoryInterface public immutable factory;
@@ -194,7 +195,7 @@ contract StakingRewardsHelper is Ownable {
      * @param underlying The underlying token
      * @param amount The amount
      */
-    function stake(address underlying, uint256 amount) public {
+    function stake(address underlying, uint256 amount) public nonReentrant {
         require(amount > 0, "invalid amount");
         address stakingToken = factory.getStakingToken(underlying);
         require(stakingToken != address(0), "invalid staking token");
@@ -204,7 +205,7 @@ contract StakingRewardsHelper is Ownable {
         // Get funds from user.
         IERC20(underlying).safeTransferFrom(msg.sender, address(this), amount);
 
-        // Mint
+        // Mint.
         IERC20(underlying).approve(stakingToken, amount);
         require(ITokenInterface(stakingToken).mint(amount) == 0, "mint failed");
 
@@ -216,18 +217,23 @@ contract StakingRewardsHelper is Ownable {
         assert(IERC20(stakingToken).balanceOf(address(this)) == 0);
     }
 
-    function stakeNative() payable external {
+    /**
+     * @notice Mint native and stake tokens into staking rewards
+     */
+    function stakeNative() public payable nonReentrant {
         require(msg.value > 0, "invalid amount");
-        IWrappedNative(wrappedNative).deposit{value: msg.value}();
-
         address stakingToken = factory.getStakingToken(wrappedNative);
         require(stakingToken != address(0), "invalid staking token");
         address stakingRewards = factory.getStakingRewards(stakingToken);
         require(stakingRewards != address(0), "staking rewards not exist");
 
-        IERC20(wrappedNative).approve(stakingToken, msg.value);
-        require(ITokenInterface(stakingToken).mint(msg.value) == 0, "mint failed");
+        // Mint native.
+        require(
+            ITokenInterface(stakingToken).mintNative{value: msg.value}() == 0,
+            "mint native failed"
+        );
 
+        // Stake to staking rewards.
         uint256 balance = IERC20(stakingToken).balanceOf(address(this));
         IERC20(stakingToken).approve(stakingRewards, balance);
         StakingRewardsInterface(stakingRewards).stakeFor(msg.sender, balance);
@@ -237,8 +243,13 @@ contract StakingRewardsHelper is Ownable {
      * @notice Unstake tokens from staking rewards and redeem
      * @param stakingRewards The staking rewards
      * @param amount The amount
+     * @param toNative Unwrap to native token or not
      */
-    function unstake(address stakingRewards, uint256 amount) public {
+    function unstake(
+        address stakingRewards,
+        uint256 amount,
+        bool toNative
+    ) public nonReentrant {
         require(amount > 0, "invalid amount");
         address stakingToken = StakingRewardsInterface(stakingRewards)
             .getStakingToken();
@@ -249,64 +260,54 @@ contract StakingRewardsHelper is Ownable {
         // Withdraw from staking rewards.
         StakingRewardsInterface(stakingRewards).withdrawFor(msg.sender, amount);
 
-        // Redeem
-        require(
-            ITokenInterface(stakingToken).redeem(amount) == 0,
-            "redeem failed"
-        );
+        if (toNative && underlying == wrappedNative) {
+            // Redeem native.
+            require(
+                ITokenInterface(stakingToken).redeemNative(amount) == 0,
+                "redeem native failed"
+            );
 
-        // Send funds to user.
-        uint256 balance = IERC20(underlying).balanceOf(address(this));
-        IERC20(underlying).transfer(msg.sender, balance);
+            // Send ethers to user.
+            (bool sent, ) = msg.sender.call{value: address(this).balance}("");
+            assert(sent);
+            assert(address(this).balance == 0);
+        } else {
+            // Redeem.
+            require(
+                ITokenInterface(stakingToken).redeem(amount) == 0,
+                "redeem failed"
+            );
 
-        assert(IERC20(underlying).balanceOf(address(this)) == 0);
-    }
-
-
-    function unstakeNative(uint256 amount) external {
-        require(amount > 0, "invalid amount");
-
-        address stakingToken = factory.getStakingToken(wrappedNative);
-        require(stakingToken != address(0), "invalid staking token");
-        address stakingRewards = factory.getStakingRewards(stakingToken);
-        require(stakingRewards != address(0), "staking rewards not exist");
-
-        // Withdraw from staking rewards.
-        StakingRewardsInterface(stakingRewards).withdrawFor(msg.sender, amount);
-
-        // Redeem
-        require(
-            ITokenInterface(stakingToken).redeem(amount) == 0,
-            "redeem failed"
-        );
-
-        // Send funds to user.
-        uint256 balance = IERC20(wrappedNative).balanceOf(address(this));
-        IWrappedNative(wrappedNative).withdraw(balance);
-        (bool sent, ) = msg.sender.call{value: balance}("");
-        assert(sent);
-        assert(IERC20(wrappedNative).balanceOf(address(this)) == 0);
+            // Send funds to user.
+            uint256 balance = IERC20(underlying).balanceOf(address(this));
+            IERC20(underlying).safeTransfer(msg.sender, balance);
+            assert(IERC20(underlying).balanceOf(address(this)) == 0);
+        }
     }
 
     /**
      * @notice Exit all staking rewards
+     * @param toNative Unwrap to native token or not
      */
-    function exitAll() public {
+    function exitAll(bool toNative) public {
         address[] memory allStakingRewards = factory.getAllStakingRewards();
-        exit(allStakingRewards);
+        exit(allStakingRewards, toNative);
     }
 
     /**
      * @notice Exit staking rewards
      * @param stakingRewards The list of staking rewards
+     * @param toNative Unwrap to native token or not
      */
-    function exit(address[] memory stakingRewards) public {
+    function exit(address[] memory stakingRewards, bool toNative) public {
         for (uint256 i = 0; i < stakingRewards.length; i++) {
             uint256 balance = StakingRewardsInterface(stakingRewards[i])
                 .balanceOf(msg.sender);
             if (balance > 0) {
-                unstake(stakingRewards[i], balance);
-                StakingRewardsInterface(stakingRewards[i]).getRewardFor(msg.sender);
+                unstake(stakingRewards[i], balance, toNative);
+                StakingRewardsInterface(stakingRewards[i]).getRewardFor(
+                    msg.sender
+                );
             }
         }
     }
@@ -323,7 +324,7 @@ contract StakingRewardsHelper is Ownable {
      * @notice Claim rewards by given staking rewards
      * @param stakingRewards The list of staking rewards
      */
-    function claimRewards(address[] memory stakingRewards) public {
+    function claimRewards(address[] memory stakingRewards) public nonReentrant {
         for (uint256 i = 0; i < stakingRewards.length; i++) {
             StakingRewardsInterface(stakingRewards[i]).getRewardFor(msg.sender);
         }
@@ -337,7 +338,12 @@ contract StakingRewardsHelper is Ownable {
      * @param amount The amount
      */
     function seize(address token, uint256 amount) external onlyOwner {
-        IERC20(token).safeTransfer(owner(), amount);
+        if (token == address(0)) {
+            (bool sent, ) = owner().call{value: address(this).balance}("");
+            assert(sent);
+        } else {
+            IERC20(token).safeTransfer(owner(), amount);
+        }
         emit TokenSeized(token, amount);
     }
 

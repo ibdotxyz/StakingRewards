@@ -129,11 +129,11 @@ describe('StakingRewardsHelper', async () => {
       expect(await stakingTokenWrappedNative.balanceOf(stakingRewardsWrappedNative.address)).to.eq(toWei('200'));
     });
 
-    it('fails to stake for mint failure', async () => {
+    it('fails to stake for mint native failure', async () => {
       await stakingTokenWrappedNative.setMintFailed();
       await wrappedNative.connect(user1).deposit({value:toWei('100')});
       await wrappedNative.connect(user1).approve(stakingRewardsHelper.address, toWei('100'));
-      await expect(stakingRewardsHelper.connect(user1).stakeNative({value:toWei('100')})).to.be.revertedWith('mint faile');
+      await expect(stakingRewardsHelper.connect(user1).stakeNative({value:toWei('100')})).to.be.revertedWith('mint native failed');
     });
   })
 
@@ -144,7 +144,7 @@ describe('StakingRewardsHelper', async () => {
 
       expect(await stakingRewards1.balanceOf(user1Address)).to.eq(toWei('200')); // 100 * 2
 
-      await stakingRewardsHelper.connect(user1).unstake(stakingRewards1.address, toWei('200'));
+      await stakingRewardsHelper.connect(user1).unstake(stakingRewards1.address, toWei('200'), false);
 
       // 100 token1 transfer from stakingToken1 to user1
       expect(await token1.balanceOf(user1Address)).to.eq(toWei('100'));
@@ -156,44 +156,42 @@ describe('StakingRewardsHelper', async () => {
       expect(await stakingToken1.balanceOf(stakingRewards1.address)).to.eq(0);
     });
 
+    it('unstakes native successfully', async () => {
+      await stakingRewardsHelper.connect(user1).stakeNative({value:toWei('100')});
+
+      expect(await stakingRewardsWrappedNative.balanceOf(user1Address)).to.eq(toWei('200')); // 100 * 2
+
+      const preUnstakeBalance = await waffle.provider.getBalance(user1Address);
+      const tx  = await stakingRewardsHelper.connect(user1).unstake(stakingRewardsWrappedNative.address, toWei('200'), true);
+      const receipt = await tx.wait()
+      const gas = receipt.gasUsed.mul(tx.gasPrice);
+      const postUnstakeBalance = await waffle.provider.getBalance(user1Address);
+
+      // 100 token1 transfer from stakingTokenWrappedNative to user1
+      expect(postUnstakeBalance.add(gas).sub(preUnstakeBalance)).to.eq(toWei('100'));
+      expect(await wrappedNative.balanceOf(stakingRewardsHelper.address)).to.eq(0);
+      expect(await wrappedNative.balanceOf(stakingTokenWrappedNative.address)).to.eq(0);
+
+      // 200 stakingTokenWrappedNative burn
+      expect(await stakingTokenWrappedNative.balanceOf(stakingRewardsHelper.address)).to.eq(0);
+      expect(await stakingTokenWrappedNative.balanceOf(stakingRewardsWrappedNative.address)).to.eq(0);
+    });
+
     it('fails to unstake for redeem failure', async () => {
       await token1.connect(user1).approve(stakingRewardsHelper.address, toWei('100'));
       await stakingRewardsHelper.connect(user1).stake(token1.address, toWei('100'));
 
       await stakingToken1.setRedeemFailed();
 
-      await expect(stakingRewardsHelper.connect(user1).unstake(stakingRewards1.address, toWei('200'))).to.be.revertedWith('redeem faile');
-    });
-  });
-
-  describe('unstakeNative', async () => {
-    it('unstakes successfully', async () => {
-      await stakingRewardsHelper.connect(user1).stakeNative({value:toWei('100')});
-
-      expect(await stakingRewardsWrappedNative.balanceOf(user1Address)).to.eq(toWei('200')); // 100 * 2
-
-      const preUnstakeBalance = await waffle.provider.getBalance(user1Address);
-      const tx  = await stakingRewardsHelper.connect(user1).unstakeNative(toWei('200'));
-      const receipt = await tx.wait()
-      const gas = receipt.gasUsed.mul(tx.gasPrice);
-      const postUnstakeBalance = await waffle.provider.getBalance(user1Address);
-
-      // 100 token1 transfer from stakingToken1 to user1
-      expect(postUnstakeBalance.add(gas).sub(preUnstakeBalance)).to.eq(toWei('100'));
-      expect(await wrappedNative.balanceOf(stakingRewardsHelper.address)).to.eq(0);
-      expect(await wrappedNative.balanceOf(stakingToken1.address)).to.eq(0);
-
-      // 200 stakingToken1 burn
-      expect(await stakingTokenWrappedNative.balanceOf(stakingRewardsHelper.address)).to.eq(0);
-      expect(await stakingTokenWrappedNative.balanceOf(stakingRewards1.address)).to.eq(0);
+      await expect(stakingRewardsHelper.connect(user1).unstake(stakingRewards1.address, toWei('200'), false)).to.be.revertedWith('redeem faile');
     });
 
-    it('fails to unstake for redeem failure', async () => {
+    it('fails to unstake native for redeem native failure', async () => {
       await stakingRewardsHelper.connect(user1).stakeNative({value:toWei('100')});
 
       await stakingTokenWrappedNative.setRedeemFailed();
 
-      await expect(stakingRewardsHelper.connect(user1).unstakeNative(toWei('200'))).to.be.revertedWith('redeem faile');
+      await expect(stakingRewardsHelper.connect(user1).unstake(stakingRewardsWrappedNative.address, toWei('200'), true)).to.be.revertedWith('redeem native failed');
     });
   });
 
@@ -236,7 +234,7 @@ describe('StakingRewardsHelper', async () => {
     });
 
     it('exits all successfully', async () => {
-      await stakingRewardsHelper.connect(user1).exitAll();
+      await stakingRewardsHelper.connect(user1).exitAll(false);
 
       // Note: there are 3 - 5 seconds delay caused by 'evm_mine' in the following calculation.
       const bal = await rewardsToken.balanceOf(user1Address);
@@ -255,7 +253,7 @@ describe('StakingRewardsHelper', async () => {
     });
 
     it('exits some successfully', async () => {
-      await stakingRewardsHelper.connect(user1).exit([stakingRewards1.address]);
+      await stakingRewardsHelper.connect(user1).exit([stakingRewards1.address], false);
 
       // Note: there are 3 - 5 seconds delay caused by 'evm_mine' in the following calculation.
       const bal = await rewardsToken.balanceOf(user1Address);
@@ -290,13 +288,17 @@ describe('StakingRewardsHelper', async () => {
       expect(userStaked[1].balance).to.eq(toWei('200'));
       expect(userStaked[2].stakingTokenAddress).to.eq(stakingTokenWrappedNative.address);
       expect(userStaked[2].balance).to.eq(toWei('0'));
-      
+
     });
   });
 
   describe('seize', async () => {
     beforeEach(async () => {
       await stakingToken1.transfer(stakingRewardsHelper.address, toWei('100'));
+      await accounts[2].sendTransaction({
+        to: stakingRewardsHelper.address,
+        value: toWei('1')
+      });
     });
 
     it('seizes successfully', async () => {
@@ -304,6 +306,15 @@ describe('StakingRewardsHelper', async () => {
       await stakingRewardsHelper.seize(stakingToken1.address, toWei('100'));
       const balance2 = await stakingToken1.balanceOf(adminAddress);
       expect(balance2.sub(balance1)).to.eq(toWei('100'));
+    });
+
+    it('seizes native successfully', async () => {
+      const balance1 = await waffle.provider.getBalance(adminAddress);
+      const tx = await stakingRewardsHelper.seize(ethers.constants.AddressZero, toWei('1'));
+      const receipt = await tx.wait()
+      const gas = receipt.gasUsed.mul(tx.gasPrice);
+      const balance2 = await waffle.provider.getBalance(adminAddress);
+      expect(balance2.add(gas).sub(balance1)).to.eq(toWei('1'));
     });
 
     it('fails to seize for non-admin', async () => {
